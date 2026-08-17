@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Habit {
+  id     Int    @id @default(autoincrement())
+  userId String @map("user_id") @db.VarChar(64)
+  name   String @db.VarChar(120)
+  unit   String @default("times") @db.VarChar(32)
+  target Decimal @default(1) @db.Decimal(10, 2)   //How much of `unit` counts as done for a single day. Decimal rather than Float so 0.1 + 0.2 style drift can never affect completion.
+
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  logs HabitLog[]
+
+  @@index([userId, archivedAt], map: "idx_habits_user")   // The dashboard always reads "the habits for one user", so userId leads.
+  @@map("habits")
+}
+
+model HabitLog {
+  id      Int    @id @default(autoincrement())
+  habitId Int    @map("habit_id")
+  userId  String @map("user_id") @db.VarChar(64)
+  logDate DateTime @map("log_date") @db.Date // A DATE, not a DATETIME: a log belongs to a calendar day, and the day is resolved in the user's timezone before it ever reaches the database.
+  value    Decimal  @db.Decimal(10, 2)
+  loggedAt DateTime @default(now()) @map("logged_at")
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, logDate], map: "uniq_habit_day")   // The rule that makes "log today" idempotent. One row per habit per day, enforced by the database rather than by a read-then-write in the API.
+
+  @@index([userId, logDate], map: "idx_logs_user_date")  // Covers the dashboard's "logs for this user since <date>" range scan.
+  @@map("habit_logs")
+}
