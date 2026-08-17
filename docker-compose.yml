@@ -1,0 +1,28 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: habit-tracker-mysql
+    # Dev-only credentials. Nothing here is reused anywhere else, and the
+    # container is not exposed beyond localhost.
+    environment:
+      MYSQL_ROOT_PASSWORD: devroot
+      MYSQL_DATABASE: habit_tracker
+      MYSQL_USER: habit
+      MYSQL_PASSWORD: habit
+    ports:
+      # 3307 on the host: developers often already have a MySQL on 3306, and a
+      # port clash is a confusing way to start a code review.
+      - "3307:3306"
+    volumes:
+      - habit-mysql-data:/var/lib/mysql
+      # Only creates the shadow database for Prisma migrations. The application
+      # schema comes from `npm run db:migrate`.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  habit-mysql-data:
